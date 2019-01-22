@@ -26,8 +26,8 @@ public class Entry<T extends IBizProcContext> {
     /**
      * 构造函数
      *
-     * @param processor
-     * @param async
+     * @param processor 处理器
+     * @param async 是否异步
      */
     public Entry(IBizProcess<T> processor, boolean async) {
         this.processor = processor;

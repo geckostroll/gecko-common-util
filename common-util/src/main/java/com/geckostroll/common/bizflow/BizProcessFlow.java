@@ -1,11 +1,11 @@
 package com.geckostroll.common.bizflow;
 
-import com.geckostroll.common.concurrent.ExecutorBuilder;
-import com.google.common.base.Stopwatch;
+import com.geckostroll.common.utils.StringUtils;
+import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -21,17 +21,15 @@ public class BizProcessFlow<T extends IBizProcContext> {
     /**
      * 「处理任务栈」线程变量
      */
-    private final ThreadLocal<Entry<T>>        processorStack = new ThreadLocal<Entry<T>>();
+    private final ThreadLocal<Entry<T>>  processorStack = new ThreadLocal<Entry<T>>();
 
     /** 当前处理链名称 */
-    private String                       bizFlowChainName;
+    private String            flowName;
 
-    /** thread pool */
-    private static final ExecutorService DEFAULT_EXECUTOR = ExecutorBuilder.newBuilder()
-            .corePoolSize(4).maxPoolSize(20)
-            .queueCapacity(50000)
-            .executorName("biz-processor-executor") //
-            .buildExecutor();
+    /**
+     * 执行异步任务的线程池
+     */
+    private ExecutorService   asyncExecutor;
 
     /**
      * 开始处理链
@@ -120,8 +118,6 @@ public class BizProcessFlow<T extends IBizProcContext> {
     public boolean onProcess(final T ctx) {
         boolean ret = false;
         try {
-            Stopwatch stopwatch = Stopwatch.createUnstarted();
-
             checkNotNull(ctx);
             Entry<T> subEntry = checkNotNull(processorStack.get());
             Entry<T> entry = null;
@@ -132,18 +128,16 @@ public class BizProcessFlow<T extends IBizProcContext> {
                 boolean entryRet = false;
                 final IBizProcess<T> proc = entry.getProcessor();
                 if (proc != null) {
-                    stopwatch.start();
                     if (!entry.isAsync()) {
                         entryRet = proc.onProcess(ctx);
                     } else {
-                        DEFAULT_EXECUTOR.execute(new Runnable() {
+                        getAsyncExecutorOrDefault().execute(new Runnable() {
                             public void run() {
                                 proc.onProcess(ctx);
                             }
                         });
                         entryRet = true;
                     }
-                    stopwatch.stop();
                 }
 
                 //如果当前节点失败
@@ -151,9 +145,7 @@ public class BizProcessFlow<T extends IBizProcContext> {
                     IBizProcess<T> failProcessor = entry.getFailPostProcessor();
                     //如果有指定失败后置处理，执行失败后置处理逻辑
                     if (failProcessor != null) {
-                        stopwatch.start();
                         failProcessor.onProcess(ctx);
-                        stopwatch.stop();
                     }
 
                     //isNextPredication==true,那么短路后续所有节点
@@ -169,7 +161,7 @@ public class BizProcessFlow<T extends IBizProcContext> {
             ret = subEntry == null;
 
         } catch (Exception e) {
-            LOGGER.error(String.format("%s,ctxId=%s,", this.bizFlowChainName, ctx.getCtxId()), e);
+            LOGGER.error(String.format("%s,ctxId=%s,", this.flowName, ctx.getCtxId()), e);
         } finally {
             //务必清除线程变量
             processorStack.remove();
@@ -198,21 +190,49 @@ public class BizProcessFlow<T extends IBizProcContext> {
         return entry;
     }
 
-    /**
-     * Getter method for property <tt>bizFlowChainName</tt>.
-     *
-     * @return property value of bizFlowChainName
-     */
-    public String getBizFlowChainName() {
-        return bizFlowChainName;
+    public ExecutorService getAsyncExecutorOrDefault() {
+        if (this.asyncExecutor == null) {
+            String executorName = StringUtils.defaultIfNull(this.flowName, "default");
+            ThreadFactory tf = new BasicThreadFactory.Builder().namingPattern(executorName + "-async").daemon(true).build();
+            this.asyncExecutor = new ThreadPoolExecutor(4, 12,
+                    1, TimeUnit.MINUTES, new LinkedBlockingQueue<>(5000), tf);
+        }
+        return this.asyncExecutor;
     }
 
     /**
-     * Setter method for property <tt>bizFlowChainName</tt>.
+     * Getter method for property <tt>flowName</tt>.
      *
-     * @param bizFlowChainName value to be assigned to property bizFlowChainName
+     * @return property value of flowName
      */
-    public void setBizFlowChainName(String bizFlowChainName) {
-        this.bizFlowChainName = bizFlowChainName;
+    public String getFlowName() {
+        return flowName;
+    }
+
+    /**
+     * Setter method for property <tt>flowName</tt>.
+     *
+     * @param flowName value to be assigned to property flowName
+     */
+    public void setFlowName(String flowName) {
+        this.flowName = flowName;
+    }
+
+    /**
+     * Getter method for property <tt>asyncExecutor</tt>.
+     *
+     * @return property value of asyncExecutor
+     */
+    public ExecutorService getAsyncExecutor() {
+        return asyncExecutor;
+    }
+
+    /**
+     * Setter method for property <tt>asyncExecutor</tt>.
+     *
+     * @param asyncExecutor value to be assigned to property asyncExecutor
+     */
+    public void setAsyncExecutor(ExecutorService asyncExecutor) {
+        this.asyncExecutor = asyncExecutor;
     }
 }

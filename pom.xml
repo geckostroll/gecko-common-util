@@ -8,14 +8,13 @@
     <artifactId>gecko-commons</artifactId>
     <version>1.0.0</version>
     <modules>
-        <module>common-rule</module>
         <module>common-util</module>
-        <module>common-test</module>
     </modules>
 
     <packaging>pom</packaging>
 
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <java.version>1.8</java.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
@@ -32,11 +31,6 @@
                 <groupId>com.geckostroll</groupId>
                 <artifactId>gecko-common-rule</artifactId>
                 <version>1.0.0</version>
-            </dependency>
-            <dependency>
-                <groupId>com.alibaba</groupId>
-                <artifactId>fastjson</artifactId>
-                <version>1.2.52</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
